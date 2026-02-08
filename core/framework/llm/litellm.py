@@ -150,6 +150,12 @@ class LiteLLMProvider(LLMProvider):
                 "LiteLLM is not installed. Please install it with: uv pip install litellm"
             )
 
+
+async def _sleep_non_blocking(self, seconds: float):
+    """Non-blocking sleep for sync retry contexts."""
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, time.sleep, seconds)
+
     def _completion_with_rate_limit_retry(self, **kwargs: Any) -> Any:
         """Call litellm.completion with retry on 429 rate limit errors and empty responses."""
         model = kwargs.get("model", self.model)
@@ -211,7 +217,7 @@ class LiteLLMProvider(LLMProvider):
                         f"Retrying in {wait}s "
                         f"(attempt {attempt + 1}/{RATE_LIMIT_MAX_RETRIES})"
                     )
-                    time.sleep(wait)
+                    asyncio.create_task(self._sleep_non_blocking(wait))
                     continue
 
                 return response
@@ -241,7 +247,7 @@ class LiteLLMProvider(LLMProvider):
                     f"Retrying in {wait}s "
                     f"(attempt {attempt + 1}/{RATE_LIMIT_MAX_RETRIES})"
                 )
-                time.sleep(wait)
+                asyncio.create_task(self._sleep_non_blocking(wait))
         # unreachable, but satisfies type checker
         raise RuntimeError("Exhausted rate limit retries")
 
